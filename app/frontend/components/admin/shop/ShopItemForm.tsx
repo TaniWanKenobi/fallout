@@ -23,8 +23,12 @@ import {
 type FormShape = {
   data: ShopItemFormData
   setData: (key: keyof ShopItemFormData, value: ShopItemFormData[keyof ShopItemFormData]) => void
-  errors: Partial<Record<keyof ShopItemFormData, string>>
+  errors: Partial<Record<keyof ShopItemFormData, string | string[]>>
   processing: boolean
+}
+
+function errText(value?: string | string[]): string | undefined {
+  return Array.isArray(value) ? value[0] : value
 }
 
 function Field({
@@ -90,7 +94,7 @@ export default function ShopItemForm({
             <CardDescription>What buyers see in the shop.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Field label="Name" htmlFor="name" error={errors.name}>
+            <Field label="Name" htmlFor="name" error={errText(errors.name)}>
               <Input
                 id="name"
                 value={data.name}
@@ -99,7 +103,7 @@ export default function ShopItemForm({
                 aria-invalid={!!errors.name}
               />
             </Field>
-            <Field label="Description" htmlFor="description" error={errors.description}>
+            <Field label="Description" htmlFor="description" error={errText(errors.description)}>
               <textarea
                 id="description"
                 value={data.description}
@@ -109,7 +113,12 @@ export default function ShopItemForm({
                 className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-colors outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               />
             </Field>
-            <Field label="Image URL" htmlFor="image_url" error={errors.image_url} hint="Square images look best.">
+            <Field
+              label="Image URL"
+              htmlFor="image_url"
+              error={errText(errors.image_url)}
+              hint="Square images look best."
+            >
               <Input
                 id="image_url"
                 value={data.image_url}
@@ -141,7 +150,7 @@ export default function ShopItemForm({
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Price" htmlFor="price" error={errors.price}>
+            <Field label="Price" htmlFor="price" error={errText(errors.price)}>
               <div className="relative">
                 <Input
                   id="price"
