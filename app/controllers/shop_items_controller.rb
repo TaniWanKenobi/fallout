@@ -15,10 +15,6 @@ class ShopItemsController < ApplicationController
       koi_balance: current_user.koi,
       gold_balance: current_user.gold,
       user_hours: (current_user.total_time_logged_seconds / 3600.0).floor,
-      ticket_hours_threshold: current_user.ticket_hours_threshold,
-      ticket_claimable: current_user.meets_ticket_hours? && !current_user.ticket_claims_disabled?,
-      ticket_claim_state: current_user.ticket_claim&.state,
-      ticket_claims_disabled: current_user.ticket_claims_disabled?,
       # Gates the project-funding Request button — grants require an approved project
       has_approved_project: current_user.ships.approved.exists?,
       is_modal: request.headers["X-InertiaUI-Modal"].present?,
