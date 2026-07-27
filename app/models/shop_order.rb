@@ -59,20 +59,25 @@ class ShopOrder < ApplicationRecord
   end
 
   def self.airtable_sync_table_id
-    "tblGaPEEZJGErZxDo"
+    "tblxnayTCB6r3dyIc"
+  end
+
+  def self.airtable_sync_sync_id
+    "BumrJ0Rr"
   end
 
   def self.airtable_sync_field_mappings
     {
-      "order_id"            => :id,
-      "verification_status" => ->(o) { o.user.verification_status },
-      "user"                => ->(o) { o.user.display_name },
-      "address"             => :address,
-      "created_at"          => ->(o) { o.created_at&.iso8601 },
-      "item"                => ->(o) { o.shop_item&.name },
-      "quantity"            => :quantity,
-      "phone_number"        => :phone,
-      "status"              => :state
+      "ID" => :id,
+      "User" => ->(o) { o.user_id },
+      # Single select in Airtable; the CSV sync source creates the option from the name.
+      "Item" => ->(o) { o.shop_item&.name },
+      "Quantity" => :quantity,
+      "Frozen Price" => :frozen_price,
+      "Frozen Gold Amount" => :frozen_gold_amount,
+      "Frozen Koi Amount" => :frozen_koi_amount,
+      "State" => :state,
+      "Created At" => ->(o) { o.created_at&.iso8601 }
     }
   end
 

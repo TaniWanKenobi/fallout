@@ -120,11 +120,8 @@ class ShopOrdersController < ApplicationController
     end
 
     if saved
-      begin
-        AirtableSync.sync_records!(ShopOrder, [ @shop_order ]) if ENV["AIRTABLE_API_KEY"].present?
-      rescue => e
-        ErrorReporter.capture_exception(e, contexts: { airtable: { shop_order_id: @shop_order.id } })
-      end
+      # Airtable sync is handled by AirtableSyncJob (ShopOrder is in CLASSES_TO_SYNC),
+      # not inline here — a request cut off mid-sync would otherwise leave data unsynced.
       redirect_to shop_item_shop_order_path(@shop_item, @shop_order), flash: { just_purchased: true }
     else
       redirect_back fallback_location: new_shop_item_shop_order_path(@shop_item),
