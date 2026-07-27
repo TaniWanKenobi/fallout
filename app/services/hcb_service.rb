@@ -150,6 +150,15 @@ module HcbService
     ).body
   end
 
+  def cancel_card_grant(card_grant_id)
+    stub = noop_write(:cancel_card_grant, { id: card_grant_id, status: "canceled" })
+    return stub if stub
+
+    authenticated_connection.post(
+      "/api/v4/card_grants/#{card_grant_id}/cancel"
+    ).body
+  end
+
   # === Transaction API Methods ===
 
   def list_card_grant_transactions(card_grant_id, after: nil)
