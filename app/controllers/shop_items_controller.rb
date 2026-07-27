@@ -19,6 +19,8 @@ class ShopItemsController < ApplicationController
       ticket_claimable: current_user.meets_ticket_hours? && !current_user.ticket_claims_disabled?,
       ticket_claim_state: current_user.ticket_claim&.state,
       ticket_claims_disabled: current_user.ticket_claims_disabled?,
+      # Gates the project-funding Request button — grants require an approved project
+      has_approved_project: current_user.ships.approved.exists?,
       is_modal: request.headers["X-InertiaUI-Modal"].present?,
       user_id: current_user.id,
       pending_dialog: shop_pending_dialog

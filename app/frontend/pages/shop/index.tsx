@@ -34,6 +34,7 @@ export default function ShopIndex({
   ticket_claimable,
   ticket_claim_state,
   ticket_claims_disabled,
+  has_approved_project,
   user_id,
   pending_dialog,
 }: {
@@ -46,6 +47,7 @@ export default function ShopIndex({
   ticket_claimable: boolean
   ticket_claim_state: 'pending' | 'approved' | 'rejected' | null
   ticket_claims_disabled: boolean
+  has_approved_project: boolean
   user_id: number
   pending_dialog: string | null
 }) {
@@ -318,7 +320,16 @@ export default function ShopIndex({
                 <img src="/koi-gold.webp" alt="koi or gold" className="inline w-11 h-auto object-contain" />
               </div>
             </div>
-            {identityBlocked ? (
+            {!has_approved_project ? (
+              <div className="mt-auto group/grant relative">
+                <div className="w-full h-10 bg-brown border-2 border-dark-brown rounded-sm text-light-brown font-bold flex items-center justify-center cursor-not-allowed text-2xl">
+                  Request
+                </div>
+                <span className="pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2 w-max max-w-56 text-center rounded bg-dark-brown px-2 py-1 text-xs text-light-brown opacity-0 transition-opacity group-hover/grant:opacity-100">
+                  You need to have approved projects to redeem funding
+                </span>
+              </div>
+            ) : identityBlocked ? (
               <div className="mt-auto w-full h-10 bg-brown border-2 border-dark-brown rounded-sm text-light-brown font-bold flex items-center justify-center cursor-not-allowed text-base px-2 text-center">
                 {identity_gate?.state === 'verified_no_address'
                   ? 'Add address to request'

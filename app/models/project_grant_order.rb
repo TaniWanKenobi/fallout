@@ -47,6 +47,9 @@ class ProjectGrantOrder < ApplicationRecord
   validates :state, inclusion: { in: STATES }
   # Project grants move real money — trials don't have the verified identity HCB expects.
   validate :user_must_be_full_account, on: :create
+  # Funding is a reward for shipped work — mirrors the shop's has_approved_project gate
+  # so a user can't bypass the disabled Request button by POSTing directly.
+  validate :user_must_have_approved_project, on: :create
   # Mirrors ShopOrder#user_can_afford: blocks at form submission rather than letting an
   # admin discover the user couldn't pay only after they're sitting in the review queue.
   validate :user_can_afford, on: :create
@@ -90,6 +93,13 @@ class ProjectGrantOrder < ApplicationRecord
     return unless user.trial?
 
     errors.add(:user, "cannot be a trial user — project grants require a full account")
+  end
+
+  def user_must_have_approved_project
+    return unless user
+    return if user.ships.approved.exists?
+
+    errors.add(:base, "You need to have approved projects to redeem funding")
   end
 
   def user_can_afford
