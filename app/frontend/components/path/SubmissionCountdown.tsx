@@ -4,9 +4,9 @@ import { Clock, Lock } from 'lucide-react'
 import Confetti from '@/components/shared/Confetti'
 import { SlidingNumber } from '@/components/shared/SlidingNumber'
 
-// June 20, 2026 11:59 PM America/New_York (EDT, UTC-4) → 2026-06-21T03:59:00Z.
+// August 14, 2026 11:59 PM America/New_York (EDT, UTC-4) → 2026-08-15T03:59:00Z.
 // Hard-coded UTC instant so the countdown is correct regardless of viewer locale.
-const TARGET_UTC = new Date('2026-06-21T03:59:00Z')
+const TARGET_UTC = new Date('2026-08-15T03:59:00Z')
 
 const ONE_HOUR_MS = 60 * 60 * 1000
 const ONE_DAY_MS = 24 * ONE_HOUR_MS
@@ -45,8 +45,8 @@ function compactDisplay({ days, hours, mins, secs }: Split): string {
 }
 
 function ariaLabel(split: Split, tier: Tier): string {
-  if (tier === 'closed') return '60-hour deadline passed'
-  return `60-hour deadline in ${split.days} days, ${split.hours} hours, ${split.mins} minutes, ${split.secs} seconds`
+  if (tier === 'closed') return 'Submission deadline passed'
+  return `Final submission deadline in ${split.days} days, ${split.hours} hours, ${split.mins} minutes, ${split.secs} seconds`
 }
 
 function useExpanded(disabled: boolean, canHover: boolean) {
@@ -294,7 +294,7 @@ export default function SubmissionCountdown() {
                   transition={contentTransition}
                   className={`whitespace-nowrap text-[10px] xs:text-xs uppercase tracking-[0.24em] ${titleColor}`}
                 >
-                  60-hour deadline in
+                  Final submission deadline in
                 </motion.span>
               ) : (
                 <motion.span
