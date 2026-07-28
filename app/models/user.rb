@@ -7,6 +7,7 @@
 #  ban_reason                         :text
 #  ban_type                           :string
 #  bio                                :text
+#  certificate_token                  :string
 #  country                            :string
 #  debt_hidden_at                     :datetime
 #  device_token                       :text
@@ -50,6 +51,7 @@
 #
 # Indexes
 #
+#  index_users_on_certificate_token   (certificate_token) UNIQUE
 #  index_users_on_debt_hidden_by_id   (debt_hidden_by_id)
 #  index_users_on_device_token        (device_token)
 #  index_users_on_discarded_at        (discarded_at)
@@ -158,11 +160,13 @@ class User < ApplicationRecord
   scope :verified, -> { where(type: nil) } # STI: verified users have type=nil; TrialUser subclass has type='TrialUser'
   scope :debt_hidden, -> { where.not(debt_hidden_at: nil) } # excluded from the debt console + its export
   scope :debt_visible, -> { where(debt_hidden_at: nil) }
+  scope :not_banned, -> { where(is_banned: false) }
 
   validates :avatar, :display_name, :email, :timezone, presence: true
   validates :email, format: { with: URI::MailTo::EMAIL_REGEXP }, allow_blank: true
   validates :hcb_email, format: { with: URI::MailTo::EMAIL_REGEXP }, allow_blank: true
   validates :bio, length: { maximum: 100 }, allow_nil: true
+  validates :certificate_token, uniqueness: true, allow_nil: true
   validates :slack_id, presence: true, unless: :trial?
   validates :hca_id, presence: true, unless: :trial?
   VALID_ROLES = %w[user admin time_auditor requirements_checker pass2_reviewer hcb].freeze
@@ -538,6 +542,28 @@ class User < ApplicationRecord
     approved = (approved_time_logged_seconds / 3600.0).round(1)
     return true if approved >= ticket_hours_threshold
     approved >= (ticket_hours_threshold - TICKET_HOURS_GRACE) && submitted_ticket_hours?
+  end
+
+  # Issues a public certificate-verification token if this user doesn't already have one.
+  # Generated on demand (see certificates:generate rake task) rather than for every user,
+  # since it's only meaningful for users who actually received a certificate.
+  #
+  # Short (8-char alphanumeric) so it fits cleanly on a printed certificate — unlike a long
+  # random token, collisions are plausible at scale, so retry until an unused one is found.
+  def generate_certificate_token!
+    return if certificate_token.present?
+
+    loop do
+      candidate = SecureRandom.alphanumeric(8)
+      next if self.class.exists?(certificate_token: candidate)
+
+      begin
+        update_column(:certificate_token, candidate) # skips validations/callbacks — only this column changes
+        break
+      rescue ActiveRecord::RecordNotUnique
+        next # another process claimed this candidate between the exists? check and the update
+      end
+    end
   end
 
   # Same bar measured against SUBMITTED (shipped, pre-approval) hours — a looser signal used by

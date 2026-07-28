@@ -367,6 +367,7 @@ This is safe: `verify_policy_scoped` only runs for `index` anyway; blanket-skipp
 | `YouTubeVideosController` | `lookup` | Trial users can look up video metadata during journal creation. |
 | `MarkdownController` | `show` | Trial users can read docs. Also has `allow_unauthenticated_access` but that only skips `authenticate_user!`, not `authenticate_verified_user!`. |
 | `OnboardingController` | `show, update` | Both trial and full users complete onboarding. |
+| `CertificateVerificationsController` | `show` | Public certificate-verification link (`/verify/:token`) — must work for anyone, signed in or not. Also `allow_unauthenticated_access` and `skip_onboarding_redirect`. Token-gated (`skip_after_action :verify_authorized/:verify_policy_scoped`, no Pundit resource), mirrors `PendingCollaborationInvitesController`. Token is a short 8-char alphanumeric slug (collision-checked on generation), not a long random token, since it's printed on the certificate. Lookup scopes on `User.verified.kept.not_banned` so a user banned after earning a certificate loses their public verification page, and trial users (who can never hold a token) are excluded defensively. |
 
 **Notable omission**: `RsvpsController` has `allow_unauthenticated_access` but **not** `allow_trial_access`. This means logged-in trial users are blocked from submitting RSVPs by `authenticate_verified_user!`. Only unauthenticated visitors (no session) can submit. This appears intentional — RSVPs are for the landing page email form, and trial users have already entered the platform.
 

@@ -620,6 +620,9 @@ Rails.application.routes.draw do
   # Universal invite link from emails — works for any auth state
   get "i/:token" => "pending_collaboration_invites#show", as: :pending_invite
 
+  # Public certificate-verification link printed on 60h certificates — works for any auth state
+  get "verify/:token" => "certificate_verifications#show", as: :verify_certificate
+
   # Top-level journal entry point — redirects to project-scoped route or shows project selection
   get "journal_entries/new" => "journal_entries#new", as: :new_journal_entry
   patch "journal_entries/:id/switch_project" => "journal_entries#switch_project", as: :switch_project_journal_entry
