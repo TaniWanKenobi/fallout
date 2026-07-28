@@ -92,6 +92,7 @@ class Project < ApplicationRecord
   has_many :pending_collaboration_invites, -> { kept }, dependent: :destroy
   has_many :reviewer_notes, dependent: :destroy
   has_many :project_flags, dependent: :destroy
+  has_many :project_time_audits, dependent: :destroy # Ad-hoc admin audits; carry no reviewable state
 
   # Cached, pre-rasterized zine/poster image used as the project's cover on the
   # bulletin board explore feed and the public /api/v1/explore API. Populated

@@ -55,7 +55,7 @@ class Admin::UsersController < Admin::ApplicationController
         base_scope = base_scope.where(is_unlisted: false) if params[:hide_unlisted] == "1"
         base_scope = base_scope.where("EXISTS (SELECT 1 FROM journal_entries WHERE journal_entries.project_id = projects.id AND journal_entries.discarded_at IS NULL)") if params[:with_journals] == "1"
         search_scope = base_scope
-        search_scope = search_scope.search_for(params[:query]) if params[:query].present?
+        search_scope = admin_search(search_scope, params[:query]) if params[:query].present?
         pagy_obj, projects = pagy(search_scope.order(created_at: :desc))
         project_ids = projects.map(&:id)
         @entry_counts = JournalEntry.where(project_id: project_ids, discarded_at: nil).group(:project_id).count
@@ -342,27 +342,8 @@ class Admin::UsersController < Admin::ApplicationController
         base_scope = base_scope.verified unless params[:include_trial] == "1"
         base_scope = base_scope.kept unless params[:include_deleted] == "1"
         search_scope = base_scope
-        if params[:query].present?
-          # Meilisearch returns a relevance-ordered list of IDs. Re-apply via a
-          # positional ORDER to preserve that order, otherwise typo-tolerant matches
-          # sink to the bottom and the visible result feels broken for short queries.
-          ranked_ids = begin
-            User.ms_search(params[:query], limit: 200).map(&:id)
-          rescue Meilisearch::ApiError, Meilisearch::CommunicationError, Errno::ECONNREFUSED
-            # pg_search fallback (rank-ordered, GIN-indexed) keeps admin search
-            # working when Meilisearch is down. Loses typo tolerance only.
-            User.search(params[:query]).limit(200).pluck(:id)
-          end
-          if ranked_ids.any?
-            order_sql = ActiveRecord::Base.send(:sanitize_sql_array, [ "array_position(ARRAY[?]::bigint[], users.id)", ranked_ids ])
-            search_scope = search_scope.where(id: ranked_ids).reorder(Arel.sql(order_sql))
-          else
-            search_scope = search_scope.none
-          end
-          @pagy, @users = pagy(search_scope)
-        else
-          @pagy, @users = pagy(search_scope.order(created_at: :desc))
-        end
+        search_scope = admin_search(search_scope, params[:query]) if params[:query].present?
+        @pagy, @users = pagy(search_scope.order(created_at: :desc))
         @projects_counts = Project.where(user_id: @users.map(&:id)).group(:user_id).count
         { users: @users.map { |u| serialize_user_row(u) }, pagy: pagy_props(@pagy), total_count: base_scope.count }
       end

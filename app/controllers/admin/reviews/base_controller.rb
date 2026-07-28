@@ -1,4 +1,6 @@
 class Admin::Reviews::BaseController < Admin::ApplicationController
+  include ReviewerNoteSerialization
+
   # No index action on base — override verify_authorized/verify_policy_scoped to avoid ActionNotFound
   skip_after_action :verify_authorized
   skip_after_action :verify_policy_scoped
@@ -175,22 +177,6 @@ class Admin::Reviews::BaseController < Admin::ApplicationController
           } ]
         end
     end.sort_by { |updated_at, _| -updated_at.to_i }.map(&:last)
-  end
-
-  def serialize_reviewer_notes(project)
-    project.reviewer_notes.includes(:user).order(created_at: :desc).map do |note|
-      {
-        id: note.id,
-        body: note.body,
-        ship_id: note.ship_id,
-        review_stage: note.review_stage,
-        author_display_name: note.user.display_name,
-        author_avatar: note.user.avatar,
-        author_id: note.user_id,
-        created_at: note.created_at.iso8601,
-        updated_at: note.updated_at.iso8601
-      }
-    end
   end
 
   def precompute_user_lifetime_hours(reviews)

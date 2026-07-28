@@ -27,7 +27,7 @@ function csrfToken(): string {
 interface ProjectNotesWindowProps {
   notes: ReviewerNote[]
   notesPath: string
-  shipId: number
+  shipId: number | null // null for standalone project audits, which have no ship
   reviewStage: string
   onClose: () => void
   setNotes: (value: ((prevState: ReviewerNote[]) => ReviewerNote[]) | ReviewerNote[]) => void

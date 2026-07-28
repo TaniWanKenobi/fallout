@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_23_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_28_072431) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -623,6 +623,23 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_23_000000) do
     t.index ["user_id"], name: "index_project_grant_warnings_on_user_id"
   end
 
+  create_table "project_time_audits", force: :cascade do |t|
+    t.jsonb "annotations", default: {}, null: false
+    t.integer "computed_seconds"
+    t.datetime "created_at", null: false
+    t.bigint "created_by_id", null: false
+    t.string "label"
+    t.bigint "last_edited_by_id"
+    t.bigint "project_id", null: false
+    t.datetime "saved_at"
+    t.string "token", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_by_id"], name: "index_project_time_audits_on_created_by_id"
+    t.index ["last_edited_by_id"], name: "index_project_time_audits_on_last_edited_by_id"
+    t.index ["project_id"], name: "index_project_time_audits_on_project_id"
+    t.index ["token"], name: "index_project_time_audits_on_token", unique: true
+  end
+
   create_table "projects", force: :cascade do |t|
     t.boolean "built_irl", default: false, null: false
     t.datetime "created_at", null: false
@@ -1174,6 +1191,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_23_000000) do
   add_foreign_key "project_grant_warnings", "project_grant_orders"
   add_foreign_key "project_grant_warnings", "users"
   add_foreign_key "project_grant_warnings", "users", column: "resolved_by_id"
+  add_foreign_key "project_time_audits", "projects"
+  add_foreign_key "project_time_audits", "users", column: "created_by_id"
+  add_foreign_key "project_time_audits", "users", column: "last_edited_by_id"
   add_foreign_key "projects", "users"
   add_foreign_key "recordings", "journal_entries"
   add_foreign_key "recordings", "users"

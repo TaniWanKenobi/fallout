@@ -151,15 +151,10 @@ class Admin::FeaturedProjectsController < Admin::ApplicationController
 
   private
 
-  # Meilisearch is preferred (typo tolerance, relevance ranking) but falls back to pg_search
-  # when the service is unreachable or when newly inserted projects haven't been indexed yet
-  # (MeilisearchReindexJob runs async after_commit, so there's a window where new records
-  # are queryable in Postgres but not yet in Meilisearch). Mirrors the same pattern used in
-  # BulletinBoardController#search_projects_for_explore.
+  # scoped_search covers name, description, repo_link and owner display name, which is what
+  # the autocomplete advertises. Newest-first so the truncated top-N is deterministic.
   def search_project_ids(query, limit:)
-    Project.ms_search(query, limit: limit).map(&:id)
-  rescue Meilisearch::ApiError, Meilisearch::CommunicationError, Errno::ECONNREFUSED
-    Project.public_for_explore.search(query).select(:id).limit(limit).map(&:id)
+    admin_search(Project.public_for_explore, query).order(created_at: :desc).limit(limit).ids
   end
 
   def create_params

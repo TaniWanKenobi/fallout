@@ -428,12 +428,37 @@ export interface ReviewRow {
 
 export interface TimeAuditReviewDetail {
   id: number
-  ship_id: number
+  ship_id: number | null // null when the page is rendering a standalone ProjectTimeAudit
   status: string
   feedback: string | null
   approved_public_seconds: number | null
   annotations: TimeAuditAnnotations | null
   reviewer_display_name: string | null
+  created_at: string
+}
+
+// An ad-hoc, project-wide time audit (ProjectTimeAudit) — no ship, no review queue, no effect on
+// approved hours. Reached only via its secret share link.
+export interface ProjectAuditContext {
+  token: string
+  label: string | null
+  share_url: string
+  created_by_display_name: string
+  last_edited_by_display_name: string | null
+  computed_hours: number | null
+  saved_at: string | null
+  created_at: string
+}
+
+export interface ProjectAuditSessionRow {
+  token: string
+  label: string | null
+  path: string
+  share_url: string
+  created_by_display_name: string
+  last_edited_by_display_name: string | null
+  computed_hours: number | null
+  saved_at: string | null
   created_at: string
 }
 

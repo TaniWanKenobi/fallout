@@ -381,6 +381,12 @@ Rails.application.routes.draw do
       resources :projects, only: [ :index, :show ] do
         resources :reviewer_notes, only: [ :create, :update, :destroy ]
       end
+
+      # Ad-hoc project-wide time audits. Created from a project (admin-only) and opened by the
+      # random token in the URL, never by id — the share link is the credential, and access is
+      # still gated to admins/time auditors by ProjectTimeAuditPolicy.
+      resources :project_time_audits, only: [ :show, :update, :destroy ], path: "project_audits", param: :token
+      post "projects/:project_id/project_audits", to: "project_time_audits#create", as: :project_audits
       resources :users, only: [ :index, :show ]
 
       resources :ships, only: [ :index, :show ], path: "reviews"

@@ -21,7 +21,7 @@ import { DataTable } from '@/components/admin/DataTable'
 import HoursDisplay from '@/components/admin/HoursDisplay'
 import AuditLog, { AuditLogLoading } from '@/components/admin/AuditLog'
 import type { AuditLogEntry } from '@/components/admin/AuditLog'
-import { ChevronLeftIcon, ExternalLinkIcon, ClockIcon, StarIcon } from 'lucide-react'
+import { ChevronLeftIcon, ExternalLinkIcon, ClockIcon, StarIcon, TimerIcon, LinkIcon, Trash2Icon } from 'lucide-react'
 import { useLiveReload } from '@/lib/useLiveReload'
 import { ReviewStatusBadge } from '@/components/admin/ReviewStatusBadge'
 import type {
@@ -31,6 +31,7 @@ import type {
   SiblingStatuses,
   SharedProps,
   PreviousReview,
+  ProjectAuditSessionRow,
 } from '@/types'
 
 function BurnoutToggle({ projectId, isBurnout }: { projectId: number; isBurnout: boolean }) {
@@ -296,6 +297,124 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
+// Ad-hoc, project-wide time audits. Admin-only: the rows expose the secret share links, and only
+// admins can open or revoke a session.
+function TimeAuditSessions({ projectId, sessions }: { projectId: number; sessions: ProjectAuditSessionRow[] }) {
+  const [label, setLabel] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [copiedToken, setCopiedToken] = useState<string | null>(null)
+
+  function create() {
+    setCreating(true)
+    router.post(
+      `/admin/projects/${projectId}/project_audits`,
+      { project_time_audit: { label: label.trim() || null } },
+      { onFinish: () => setCreating(false) },
+    )
+  }
+
+  function copy(session: ProjectAuditSessionRow) {
+    navigator.clipboard.writeText(session.share_url).then(() => {
+      setCopiedToken(session.token)
+      setTimeout(() => setCopiedToken(null), 2000)
+    })
+  }
+
+  return (
+    <div className="mt-8">
+      <div className="flex items-center gap-2 mb-4">
+        <h2 className="text-lg font-semibold tracking-tight">Standalone Time Audits</h2>
+        <Badge variant="secondary" className="text-sm">
+          {sessions.length}
+        </Badge>
+        <Button variant="outline" size="sm" className="ml-auto" onClick={() => setDialogOpen(true)}>
+          <TimerIcon data-icon="inline-start" />
+          New Audit
+        </Button>
+      </div>
+
+      {sessions.length > 0 ? (
+        <Card className="py-0">
+          <div className="divide-y divide-border">
+            {sessions.map((session) => (
+              <div key={session.token} className="p-3 flex items-center gap-3 flex-wrap">
+                <Link href={session.path} className="text-sm font-medium hover:underline">
+                  {session.label || 'Untitled audit'}
+                </Link>
+                <span className="text-xs text-muted-foreground">
+                  by {session.created_by_display_name} · {session.created_at}
+                </span>
+                {session.computed_hours !== null ? (
+                  <Badge variant="outline" className="text-xs">
+                    {session.computed_hours}h
+                  </Badge>
+                ) : (
+                  <span className="text-xs text-muted-foreground">not saved yet</span>
+                )}
+                {session.last_edited_by_display_name && (
+                  <span className="text-xs text-muted-foreground">
+                    last edited by {session.last_edited_by_display_name}
+                    {session.saved_at && ` · ${session.saved_at}`}
+                  </span>
+                )}
+                <div className="ml-auto flex items-center gap-1">
+                  <Button variant="ghost" size="sm" onClick={() => copy(session)}>
+                    <LinkIcon data-icon="inline-start" />
+                    {copiedToken === session.token ? 'Copied!' : 'Copy Link'}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => router.delete(session.path, { preserveScroll: true })}
+                    title="Delete this audit and revoke its link"
+                  >
+                    <Trash2Icon />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          No standalone audits. Creating one opens a shareable audit over every journal entry on this project — it never
+          affects ship time audits or approved hours.
+        </p>
+      )}
+
+      <AlertDialog open={dialogOpen} onOpenChange={(o) => !creating && setDialogOpen(o)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>New standalone time audit</AlertDialogTitle>
+          </AlertDialogHeader>
+          <div className="space-y-1.5">
+            <label htmlFor="audit-label" className="text-sm font-medium">
+              Label <span className="text-muted-foreground">(optional)</span>
+            </label>
+            <Input
+              id="audit-label"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="Why is this project being audited?"
+            />
+            <p className="text-xs text-muted-foreground">
+              Generates a secret link any time auditor or admin can open. Saving it has no effect on ship time audits,
+              approved hours, or koi.
+            </p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={creating}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={create} disabled={creating}>
+              {creating ? 'Creating…' : 'Create & Open'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}
+
 function reviewTypeLabel(type: string): string {
   switch (type) {
     case 'requirements_check_review':
@@ -319,6 +438,7 @@ export default function AdminProjectsShow({
   journal_entries,
   pagy_entries,
   audit_log,
+  time_audit_sessions,
 }: {
   project: AdminProjectDetail
   ships: ShipRow[]
@@ -327,6 +447,7 @@ export default function AdminProjectsShow({
   journal_entries: JournalEntry[]
   pagy_entries: PagyProps
   audit_log?: AuditLogEntry[]
+  time_audit_sessions?: ProjectAuditSessionRow[] // Admin-only — omitted for other staff
 }) {
   const { auth, admin_permissions } = usePage<SharedProps & { admin_permissions?: { is_admin: boolean } }>().props
   const isAdmin = auth.user?.is_admin ?? false
@@ -576,6 +697,8 @@ export default function AdminProjectsShow({
           </Card>
         </div>
       )}
+
+      {time_audit_sessions !== undefined && <TimeAuditSessions projectId={project.id} sessions={time_audit_sessions} />}
 
       <div className="flex items-center gap-2 mb-4 mt-8">
         <h2 className="text-lg font-semibold tracking-tight">Journal Entries</h2>

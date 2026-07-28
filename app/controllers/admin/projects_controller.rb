@@ -42,6 +42,8 @@ class Admin::ProjectsController < Admin::ApplicationController
       pagy_entries: pagy_props(@pagy_entries)
     }
     props[:audit_log] = InertiaRails.defer { serialize_audit_log(@project) } if current_user.admin? # Audit log — admin-only
+    # Share links are admin-only: listing them would hand every staff member every secret URL.
+    props[:time_audit_sessions] = serialize_time_audit_sessions(@project) if current_user.admin?
     render inertia: props
   end
 
@@ -87,23 +89,8 @@ class Admin::ProjectsController < Admin::ApplicationController
         base_scope = base_scope.where("EXISTS (SELECT 1 FROM journal_entries WHERE journal_entries.project_id = projects.id AND journal_entries.discarded_at IS NULL)") if params[:with_journals] == "1"
         search_scope = base_scope
         if params[:query].present?
-          # Meilisearch returns a relevance-ordered list of IDs. Re-apply via a positional
-          # ORDER to preserve relevance — keeps typo-tolerant / partial-word matches at the
-          # top instead of sinking to the bottom under created_at desc.
-          ranked_ids = begin
-            Project.ms_search(params[:query], limit: 200).map(&:id)
-          rescue Meilisearch::ApiError, Meilisearch::CommunicationError, Errno::ECONNREFUSED
-            # pg_search fallback (rank-ordered, GIN-indexed) keeps admin search
-            # working when Meilisearch is down. Loses typo tolerance only.
-            Project.search(params[:query]).limit(200).pluck(:id)
-          end
-          if ranked_ids.any?
-            order_sql = ActiveRecord::Base.send(:sanitize_sql_array, [ "array_position(ARRAY[?]::bigint[], projects.id)", ranked_ids ])
-            search_scope = search_scope.where(id: ranked_ids).reorder(Arel.sql(order_sql))
-          else
-            search_scope = search_scope.none
-          end
-          @pagy, @projects = pagy(search_scope)
+          search_scope = admin_search(search_scope, params[:query])
+          @pagy, @projects = pagy(search_scope.order(created_at: :desc))
           total = base_scope.count
         else
           @pagy, @projects = pagy(search_scope.order(created_at: :desc))
@@ -140,6 +127,22 @@ class Admin::ProjectsController < Admin::ApplicationController
       is_featured: @featured_project_ids&.include?(project.id) || false,
       created_at: project.created_at.strftime("%b %d, %Y")
     }
+  end
+
+  def serialize_time_audit_sessions(project)
+    policy_scope(project.project_time_audits.recent.includes(:created_by, :last_edited_by)).map do |audit|
+      {
+        token: audit.token,
+        label: audit.label,
+        path: admin_project_time_audit_path(audit),
+        share_url: admin_project_time_audit_url(audit),
+        created_by_display_name: audit.created_by.display_name,
+        last_edited_by_display_name: audit.last_edited_by&.display_name,
+        computed_hours: audit.computed_hours,
+        saved_at: audit.saved_at&.strftime("%b %d, %Y"),
+        created_at: audit.created_at.strftime("%b %d, %Y")
+      }
+    end
   end
 
   def serialize_project_detail(project)

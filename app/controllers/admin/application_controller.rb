@@ -51,6 +51,17 @@ class Admin::ApplicationController < ApplicationController
     raise ActionController::RoutingError, "Not Found" unless current_user&.admin?
   end
 
+  # Admin search runs through scoped_search: free text matches every declared field, and
+  # admins can narrow with the query language (`role = admin`, `owner ~ ada`, `id = 12`).
+  # scoped_search parses eagerly and raises on a query it can't compile (bad operator for
+  # the field type, dangling operator), which for half-typed input would surface as a 500 —
+  # degrade to the model's pg_search scope instead.
+  def admin_search(scope, query)
+    scope.search_for(query)
+  rescue ScopedSearch::QueryNotSupported
+    scope.search(query)
+  end
+
   CENSORED_FIELD_PATTERNS = %w[secret token key password encrypted].freeze
 
   ENUM_MAPPINGS = {

@@ -49,6 +49,7 @@ import {
   FlagIcon,
   PlayIcon,
   PauseIcon,
+  LinkIcon,
 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/admin/ui/tooltip'
 import { Kbd } from '@/components/admin/ui/kbd'
@@ -62,6 +63,7 @@ import type {
   ReviewProjectContext,
   ReviewerNote,
   SiblingReviews,
+  ProjectAuditContext,
 } from '@/types'
 
 function formatDuration(seconds: number): string {
@@ -120,6 +122,10 @@ function ReviewTopBar({
   projectFlagged,
   flagging,
   reviewStatus,
+  indexPath,
+  isProjectAudit,
+  audit,
+  saved,
   onSkip,
   onSubmit,
   onToggleNotes,
@@ -135,24 +141,42 @@ function ReviewTopBar({
   projectFlagged: boolean
   flagging: boolean
   reviewStatus: string
+  indexPath: string
+  isProjectAudit: boolean
+  audit?: ProjectAuditContext
+  saved: boolean
   onSkip: () => void
   onSubmit: () => void
   onToggleNotes: () => void
   onFlag: (reason: string) => void
 }) {
-  const isTerminal = reviewStatus !== 'pending'
+  const isTerminal = !isProjectAudit && reviewStatus !== 'pending'
   const [flagReason, setFlagReason] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  const copyShareLink = useCallback(() => {
+    if (!audit) return
+    navigator.clipboard.writeText(audit.share_url).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }, [audit])
 
   return (
     <div className="z-50 bg-muted/40 border-b border-border px-4 py-2 flex flex-col sm:flex-row sm:items-center gap-2 shrink-0">
       <div className="flex items-center gap-3 flex-wrap">
         <Button variant="outline" size="sm" asChild>
-          <Link href="/admin/reviews/time_audits">End Session</Link>
+          <Link href={indexPath}>{isProjectAudit ? 'Close' : 'End Session'}</Link>
         </Button>
-        {!isTerminal && (
+        {!isTerminal && !isProjectAudit && (
           <Button variant="ghost" size="sm" onClick={onSkip}>
             Skip
           </Button>
+        )}
+        {isProjectAudit && (
+          <Badge variant="secondary" className="shrink-0">
+            Standalone Audit
+          </Badge>
         )}
 
         <Separator orientation="vertical" className="h-6" />
@@ -205,9 +229,16 @@ function ReviewTopBar({
           {totalEntries} {totalEntries === 1 ? 'entry' : 'entries'} to review ({formatDuration(approvedSeconds)} /{' '}
           {formatDuration(totalDuration)})
         </span>
+        {audit?.label && <span className="text-sm text-muted-foreground italic truncate">“{audit.label}”</span>}
       </div>
 
       <div className="flex items-center gap-2 sm:ml-auto flex-wrap">
+        {isProjectAudit && (
+          <Button variant="outline" size="sm" onClick={copyShareLink}>
+            <LinkIcon data-icon="inline-start" />
+            {copied ? 'Copied!' : 'Copy Link'}
+          </Button>
+        )}
         <Button variant="outline" size="sm" asChild>
           <a href={`/admin/users/${project.user_id}`} target="_blank" rel="noopener noreferrer">
             <UserIcon data-icon="inline-start" />
@@ -240,6 +271,19 @@ function ReviewTopBar({
           >
             {reviewStatus}
           </Badge>
+        ) : isProjectAudit ? (
+          <>
+            <Separator orientation="vertical" className="h-6" />
+
+            <Button size="sm" disabled={submitting} onClick={onSubmit}>
+              {submitting ? (
+                <LoaderIcon data-icon="inline-start" className="animate-spin" />
+              ) : (
+                <SaveIcon data-icon="inline-start" />
+              )}
+              {saved ? 'Saved' : 'Save Audit'}
+            </Button>
+          </>
         ) : (
           <>
             {projectFlagged ? (
@@ -1665,22 +1709,29 @@ const EntrySection = memo(
 // --- Main Page ---
 
 interface PageProps {
+  // 'ship' = the real time audit queue (TimeAuditReview). 'project' = a standalone, admin-created
+  // audit over a whole project (ProjectTimeAudit) that writes to nothing in the ship pipeline.
+  mode?: 'ship' | 'project'
   review: TimeAuditReviewDetail
   project: ReviewProjectContext
   new_entries: ReviewJournalEntry[]
   previous_entries: ReviewJournalEntry[]
-  sibling_statuses: SiblingReviews
+  sibling_statuses: SiblingReviews | null
   reviewer_notes?: ReviewerNote[]
   reviewer_notes_path: string
   project_flagged: boolean
   can: { update: boolean }
   skip: string | null
-  heartbeat_path: string
-  next_path: string
+  heartbeat_path: string | null
+  next_path: string | null
   index_path: string
+  update_path: string
+  update_key: string
+  audit?: ProjectAuditContext
 }
 
 export default function TimeAuditsShow({
+  mode = 'ship',
   review,
   project,
   new_entries,
@@ -1691,14 +1742,21 @@ export default function TimeAuditsShow({
   skip,
   heartbeat_path,
   next_path,
+  index_path,
+  update_path,
+  update_key,
+  audit,
 }: PageProps) {
-  const isTerminal = review.status !== 'pending'
+  const isProjectAudit = mode === 'project'
+  const isTerminal = !isProjectAudit && review.status !== 'pending'
 
   const allEntries = useMemo(() => [...new_entries, ...previous_entries], [new_entries, previous_entries])
 
-  useReviewHeartbeat(heartbeat_path, !isTerminal)
+  // Standalone audits hold no claim, so there is nothing to keep alive
+  useReviewHeartbeat(heartbeat_path ?? '', !isTerminal && !!heartbeat_path)
 
   const handleSkip = useCallback(() => {
+    if (!next_path) return
     const skipIds = skip ? skip.split(',') : []
     skipIds.push(String(review.id))
     router.visit(`${next_path}?skip=${skipIds.join(',')}`)
@@ -1706,6 +1764,7 @@ export default function TimeAuditsShow({
 
   const handleFlag = useCallback(
     async (reason: string) => {
+      if (!next_path) return // Flagging is a queue action — unreachable from a standalone audit
       setFlagging(true)
       try {
         const res = await fetch('/admin/project_flags', {
@@ -1736,6 +1795,8 @@ export default function TimeAuditsShow({
     },
     [project.id, review.ship_id, review.id, skip, next_path],
   )
+
+  const [justSaved, setJustSaved] = useState(false) // Transient "Saved" confirmation on the standalone-audit button
 
   const [annotations, setAnnotations] = useState<TimeAuditAnnotations>(review.annotations ?? { recordings: {} })
   const [savedRecordings, setSavedRecordings] = useState<Set<string>>(() => {
@@ -1863,7 +1924,7 @@ export default function TimeAuditsShow({
     async (recordingId: number) => {
       setSavingRecording(recordingId)
       try {
-        const res = await fetch(`/admin/reviews/time_audits/${review.id}`, {
+        const res = await fetch(update_path, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
@@ -1871,7 +1932,7 @@ export default function TimeAuditsShow({
             Accept: 'application/json',
           },
           body: JSON.stringify({
-            time_audit_review: { annotations: annotationsRef.current },
+            [update_key]: { annotations: annotationsRef.current },
           }),
         })
         if (res.ok) {
@@ -1881,7 +1942,7 @@ export default function TimeAuditsShow({
         setSavingRecording(null)
       }
     },
-    [review.id],
+    [update_path, update_key],
   )
 
   const entryReviewedCheck = useCallback(
@@ -1936,16 +1997,43 @@ export default function TimeAuditsShow({
     return Math.round(total)
   }, [new_entries, annotations, entryReviewedCheck])
 
-  const handleSubmit = useCallback(() => {
+  // Standalone audits just persist their annotations and running total — there is no decision to
+  // submit and nothing downstream consumes the result, so the page stays put.
+  const handleSaveAudit = useCallback(async () => {
     setSubmitting(true)
-    const url = skip
-      ? `/admin/reviews/time_audits/${review.id}?skip=${skip}`
-      : `/admin/reviews/time_audits/${review.id}`
+    try {
+      const res = await fetch(update_path, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken(),
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          [update_key]: { annotations: annotationsRef.current, computed_seconds: approvedSeconds },
+        }),
+      })
+      if (res.ok) {
+        setJustSaved(true)
+        setTimeout(() => setJustSaved(false), 2000)
+      }
+    } finally {
+      setSubmitting(false)
+    }
+  }, [update_path, update_key, approvedSeconds])
+
+  const handleSubmit = useCallback(() => {
+    if (isProjectAudit) {
+      handleSaveAudit()
+      return
+    }
+    setSubmitting(true)
+    const url = skip ? `${update_path}?skip=${skip}` : update_path
     router.patch(
       url,
       {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        time_audit_review: {
+        [update_key]: {
           status: 'approved',
           annotations: annotationsRef.current,
           approved_public_seconds: approvedSeconds,
@@ -1955,7 +2043,7 @@ export default function TimeAuditsShow({
         onFinish: () => setSubmitting(false),
       },
     )
-  }, [review.id, approvedSeconds, skip])
+  }, [isProjectAudit, handleSaveAudit, update_path, update_key, approvedSeconds, skip])
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
@@ -2008,7 +2096,9 @@ export default function TimeAuditsShow({
   }, [handleSaveAndNext])
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden border-t-3 border-blue-500">
+    <div
+      className={`h-screen flex flex-col overflow-hidden border-t-3 ${isProjectAudit ? 'border-purple-500' : 'border-blue-500'}`}
+    >
       <ReviewTopBar
         project={project}
         totalEntries={new_entries.length}
@@ -2020,6 +2110,10 @@ export default function TimeAuditsShow({
         projectFlagged={isFlagged}
         flagging={flagging}
         reviewStatus={review.status}
+        indexPath={index_path}
+        isProjectAudit={isProjectAudit}
+        audit={audit}
+        saved={justSaved}
         onSkip={handleSkip}
         onSubmit={handleSubmit}
         onToggleNotes={() => setNotesOpen((v) => !v)}

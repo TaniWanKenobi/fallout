@@ -167,6 +167,16 @@ Mandatory internal justification (`internal_reason`) was dropped from the normal
 
 Time Audit now rejects link-only feedback in the admin controller (`Admin::Reviews::TimeAuditsController#update`). If `feedback` consists only of one or more `http(s)` URLs, the update is rejected with an inline validation error requiring written explanation.
 
+### Standalone project time audits (`ProjectTimeAudit`)
+
+An **admin-only** escape hatch for auditing a project's time outside the ship pipeline — e.g. spot-checking a project that has never shipped.
+
+- **Model**: `ProjectTimeAudit` (`project_id`, `created_by_id`, `last_edited_by_id`, random `token`, optional `label`, `annotations` jsonb, `computed_seconds`, `saved_at`). No `ship_id`, no association to `TimeAuditReview`, no callbacks, no Airtable sync, no koi/gold. Saving one **cannot** move approved hours or any review status — it is a scratchpad. `to_param` returns the token so URLs are never id-based.
+- **Access**: `ProjectTimeAuditPolicy` — `create?`/`destroy?` are admin-only; `show?`/`update?` allow admins **and** anyone with `can_review?(:time_audit)`. The secret URL is the sharing mechanism, not the authorization: a leaked link is useless to non-auditors. The `Scope` (used to list a project's audits on `/admin/projects/:id`) is admin-only, so staff never see the full set of share links.
+- **Routes**: `POST /admin/projects/:project_id/project_audits` (create) and `GET|PATCH|DELETE /admin/project_audits/:token`.
+- **UI**: `Admin::ProjectTimeAuditsController#show` renders the *same* Inertia page as the ship queue (`admin/reviews/time_audits/show`) with `mode: "project"` — all of the project's kept journal entries as `new_entries`, empty `previous_entries`, no claim/heartbeat, no Skip, no Flag, no approve/return decision. Its top border is purple (ship audits are blue) and the top bar carries a "Standalone Audit" badge + Copy Link. "Save Audit" PATCHes `annotations` + `computed_seconds` and stays on the page.
+- **Shared serializers**: `TimeAuditSerialization` (`ta_recording_duration`, `serialize_ta_recording`, `serialize_ta_journal_entry`, `serialize_ta_project_context`) and `ReviewerNoteSerialization` (`serialize_reviewer_notes`, also included by `Admin::Reviews::BaseController`). The `ta_` prefix is deliberate — `Admin::Reviews::BaseController` defines same-named serializers with *different arities* for RC/DR/BR, and shadowing them by inclusion order would be a silent trap.
+
 `Ship#phase_one_complete?` does:
 ```ruby
 TimeAuditReview.where(ship_id: id, status: :approved).exists? &&
@@ -620,7 +630,7 @@ Both `User#koi` and `User#gold` short-circuit to `0` for trial users. `ShopOrder
 
 | Path | Purpose |
 |---|---|
-| `pages/admin/reviews/time_audits/{index,show}.tsx` | TA queue + review UI with timeline + segment annotation |
+| `pages/admin/reviews/time_audits/{index,show}.tsx` | TA queue + review UI with timeline + segment annotation. `show.tsx` is dual-mode via the `mode` prop: `ship` (a `TimeAuditReview`) or `project` (a standalone `ProjectTimeAudit` — see §3). Paths come from props (`index_path`, `update_path`, `update_key`, `next_path`, `heartbeat_path`), not hardcoded. |
 | `pages/admin/reviews/requirements_checks/{index,show}.tsx` | RC queue + repo tree viewer (refresh via `refresh_tree`) |
 | `pages/admin/reviews/design_reviews/show.tsx` | DR queue (Phase 2 design ships) |
 | `pages/admin/reviews/build_reviews/show.tsx` | BR queue (Phase 2 build ships). Shows "Approval will convert N koi → N gold" preview below the Modify Gold field when this would be the project's first approved BR and the owner has koi to convert. |
