@@ -13,6 +13,11 @@ module HcaService
   module_function
 
   def host
+    # HCA_HOST override lets tooling (e.g. dry-running exports against prod data
+    # from a dev shell) target a specific HCA instance. Never set in production,
+    # where the Rails.env branch below selects auth.hackclub.com.
+    return ENV["HCA_HOST"] if ENV["HCA_HOST"].present?
+
     if Rails.env.production?
       "https://auth.hackclub.com"
     else
