@@ -3,15 +3,16 @@
 # Table name: shop_orders
 #
 #  id                 :bigint           not null, primary key
-#  address            :text
 #  admin_note         :text
 #  frozen_gold_amount :integer          default(0), not null
 #  frozen_koi_amount  :integer          not null
 #  frozen_price       :integer          not null
+#  legacy_address     :text
 #  phone              :text
 #  quantity           :integer          default(1), not null
 #  selected_dates     :text             default([]), is an Array
 #  state              :string           default("pending"), not null
+#  structured_address :text
 #  created_at         :datetime         not null
 #  updated_at         :datetime         not null
 #  shop_item_id       :bigint           not null
@@ -33,10 +34,15 @@ class ShopOrder < ApplicationRecord
 
   # Shipping PII of minors — encrypted at rest. Never queried, so non-deterministic.
   encrypts :phone
-  encrypts :address
+  # legacy_address: pre-refactor formatted-blob string (kept for orders not yet backfilled).
+  # structured_address: HCA-shaped hash (first_name/last_name/line_1/line_2/city/state/
+  # postal_code/country) serialized to JSON. Both hold minors' PII, so both stay encrypted.
+  encrypts :legacy_address
+  serialize :structured_address, coder: JSON
+  encrypts :structured_address
 
   # Skip PII columns so shipping details aren't duplicated into versions, which a PII deletion of the order wouldn't reach.
-  has_paper_trail skip: %i[phone address]
+  has_paper_trail skip: %i[phone legacy_address structured_address]
 
   belongs_to :user
   belongs_to :shop_item
@@ -51,7 +57,9 @@ class ShopOrder < ApplicationRecord
   validates :frozen_koi_amount, presence: true, numericality: { greater_than_or_equal_to: 0, only_integer: true }
   validates :frozen_gold_amount, presence: true, numericality: { greater_than_or_equal_to: 0, only_integer: true }
   validates :quantity, presence: true, numericality: { greater_than: 0, only_integer: true }
-  validates :address, presence: true, if: -> { shop_item&.requires_shipping? }
+  # New orders must capture a structured address for shipping items; legacy_address is
+  # only ever populated by the backfill, never by the create flow, so it isn't validated.
+  validates :structured_address, presence: true, if: -> { shop_item&.requires_shipping? }, on: :create
   validates :phone, presence: true, if: -> { shop_item&.requires_shipping? }
   validate :phone_digit_count
   validate :selected_dates_valid, if: -> { shop_item&.requires_date_selection? }
@@ -82,6 +90,22 @@ class ShopOrder < ApplicationRecord
       "State" => :state,
       "Created At" => ->(o) { o.created_at&.iso8601 }
     }
+  end
+
+  # Human-readable shipping address for display/serialization. Prefers the structured
+  # HCA-shaped address (new orders); falls back to the pre-refactor formatted blob
+  # (legacy_address) for orders not yet backfilled.
+  def address
+    return legacy_address if structured_address.blank?
+
+    a = structured_address
+    [
+      [ a["first_name"], a["last_name"] ].filter_map(&:presence).join(" ").presence,
+      a["line_1"].presence,
+      a["line_2"].presence,
+      [ a["city"], a["state"], a["postal_code"] ].filter_map(&:presence).join(", ").presence,
+      a["country"].presence
+    ].compact.join("\n")
   end
 
   private

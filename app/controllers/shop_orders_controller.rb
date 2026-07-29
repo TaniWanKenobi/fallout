@@ -67,15 +67,17 @@ class ShopOrdersController < ApplicationController
   end
 
   def create
+    structured_address = nil
     if @shop_item.requires_shipping?
-      addresses = hca_formatted_addresses
+      raw_addresses = hca_addresses_raw
       index = params[:address_index].to_i
-      address = (index >= 0 && index < addresses.length) ? addresses[index] : nil # Reject negative/out-of-bounds indices
+      selected = (index >= 0 && index < raw_addresses.length) ? raw_addresses[index] : nil # Reject negative/out-of-bounds indices
 
-      unless address.present?
+      unless selected.present?
         return redirect_back fallback_location: new_shop_item_shop_order_path(@shop_item),
           inertia: { errors: { base: [ "A valid shipping address is required" ] } }
       end
+      structured_address = structured_address_from(selected)
 
       phone = params[:phone].to_s.strip
       unless phone.present?
@@ -96,7 +98,7 @@ class ShopOrdersController < ApplicationController
       end
     end
 
-    @shop_order = @shop_item.shop_orders.build(address: address, phone: phone, quantity: quantity, selected_dates: selected_dates, user: current_user)
+    @shop_order = @shop_item.shop_orders.build(structured_address: structured_address, phone: phone, quantity: quantity, selected_dates: selected_dates, user: current_user)
     authorize @shop_order
 
     # Lock the user row to prevent concurrent orders from double-spending currency
@@ -139,20 +141,45 @@ class ShopOrdersController < ApplicationController
     raise ActiveRecord::RecordNotFound unless @shop_item.available?
   end
 
-  def hca_formatted_addresses
-    test_address = "Test User\n123 Test Street\nToronto, ON, M5V 1A1\nCanada"
-    return [ test_address ] if Rails.env.development?
-
-    (current_user.hca_identity&.dig("addresses") || []).map do |addr|
-      [
-        [ addr["first_name"], addr["last_name"] ].compact.join(" ").presence,
-        addr["address"],
-        addr["line_2"].presence,
-        [ addr["city"], addr["state"], addr["postal_code"] ].compact.join(", "),
-        addr["country"],
-        addr["phone"].presence
-      ].compact.join("\n")
+  # Raw HCA address hashes (HCA identity shape) — the source of truth for both the
+  # picker display and the structured_address stored on the order. Indexed by the
+  # address_index the frontend submits, so this must stay in the same order as the display.
+  def hca_addresses_raw
+    if Rails.env.development?
+      return [ { "first_name" => "Test", "last_name" => "User", "line_1" => "123 Test Street",
+                 "city" => "Toronto", "state" => "ON", "postal_code" => "M5V 1A1", "country" => "Canada" } ]
     end
+
+    current_user.hca_identity&.dig("addresses") || []
+  end
+
+  def hca_formatted_addresses
+    hca_addresses_raw.map { |addr| format_hca_address(addr) }
+  end
+
+  # HCA returns the street as line_1 (older records used "address"); fall back so the
+  # street line is never dropped from the display.
+  def format_hca_address(addr)
+    [
+      [ addr["first_name"], addr["last_name"] ].filter_map(&:presence).join(" ").presence,
+      addr["line_1"].presence || addr["address"].presence,
+      addr["line_2"].presence,
+      [ addr["city"], addr["state"], addr["postal_code"] ].filter_map(&:presence).join(", ").presence,
+      addr["country"].presence,
+      addr["phone"].presence
+    ].compact.join("\n")
+  end
+
+  # Maps a raw HCA address to the structured hash persisted on the order.
+  def structured_address_from(addr)
+    {
+      "first_name" => addr["first_name"], "last_name" => addr["last_name"],
+      "line_1" => addr["line_1"].presence || addr["address"].presence,
+      "line_2" => addr["line_2"].presence,
+      "city" => addr["city"], "state" => addr["state"],
+      "postal_code" => addr["postal_code"], "country" => addr["country"],
+      "hca_address_id" => addr["id"]
+    }.compact
   end
 
   def serialize_shop_item(item)

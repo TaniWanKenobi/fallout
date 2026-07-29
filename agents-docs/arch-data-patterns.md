@@ -205,7 +205,7 @@ Rails Active Record encryption enabled for sensitive fields:
 - `user.slack_token` — Slack OAuth token
 - `user.device_token` — deterministic encryption (for `find_by` lookups)
 - `ship.frozen_hca_data` — user identity snapshot at submission
-- `shop_order.phone`, `shop_order.address` — shipping PII
+- `shop_order.phone`, `shop_order.legacy_address`, `shop_order.structured_address` — shipping PII. `structured_address` is an HCA-shaped hash (first_name/last_name/line_1/line_2/city/state/postal_code/country) serialized to JSON then encrypted; new orders write it. `legacy_address` holds the pre-refactor formatted-blob string for orders not yet backfilled. `ShopOrder#address` returns a display string, preferring `structured_address` and falling back to `legacy_address`.
 - `hcb_connection.access_token`, `hcb_connection.refresh_token` — HCB OAuth tokens
 
 Session cookie: standard Rails cookie encryption (`_fallout_session`, 3-month expiry).
