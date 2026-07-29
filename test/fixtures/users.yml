@@ -7,6 +7,7 @@
 #  ban_reason                         :text
 #  ban_type                           :string
 #  bio                                :text
+#  certificate_token                  :string
 #  country                            :string
 #  debt_hidden_at                     :datetime
 #  device_token                       :text
@@ -50,6 +51,7 @@
 #
 # Indexes
 #
+#  index_users_on_certificate_token   (certificate_token) UNIQUE
 #  index_users_on_debt_hidden_by_id   (debt_hidden_by_id)
 #  index_users_on_device_token        (device_token)
 #  index_users_on_discarded_at        (discarded_at)
