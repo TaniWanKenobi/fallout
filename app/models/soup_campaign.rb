@@ -39,6 +39,9 @@ class SoupCampaign < ApplicationRecord
     U07ACECRYM6 U080A3QP42C U03UBRVG2MS U07DJMFAQQP U09UE480JHH
   ].freeze
 
+  # Skip yjs_state — large binary collab-editing blob with no audit value.
+  has_paper_trail skip: %i[yjs_state]
+
   belongs_to :created_by, class_name: "User"
   has_many :soup_campaign_recipients, dependent: :destroy
 

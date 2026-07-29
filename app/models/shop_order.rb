@@ -35,6 +35,9 @@ class ShopOrder < ApplicationRecord
   encrypts :phone
   encrypts :address
 
+  # Skip PII columns so shipping details aren't duplicated into versions, which a PII deletion of the order wouldn't reach.
+  has_paper_trail skip: %i[phone address]
+
   belongs_to :user
   belongs_to :shop_item
 

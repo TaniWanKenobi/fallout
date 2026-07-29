@@ -25,6 +25,8 @@ class ShopItem < ApplicationRecord
   STATUSES = %w[available unavailable].freeze
   CURRENCIES = %w[koi gold hours].freeze
 
+  has_paper_trail
+
   has_many :shop_orders, dependent: :restrict_with_error
 
   enum :status, { available: "available", unavailable: "unavailable" }, default: "available"
