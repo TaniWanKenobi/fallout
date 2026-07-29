@@ -132,10 +132,9 @@ class Admin::Reviews::RequirementsChecksController < Admin::Reviews::BaseControl
         page_project_ids = (pending_reviews + @all_reviews).map { |r| r.ship.project_id }.uniq
         previously_reviewed = precompute_previously_reviewed_project_ids(page_project_ids)
         lifetime_hours = precompute_user_lifetime_hours(pending_reviews)
-        priority_ids = ReviewPriorityCalculator.priority_ship_ids(pending_reviews.map(&:ship))
-        pending_reviews = sort_pending(pending_reviews, sort, lifetime_hours, priority_ids)
+        pending_reviews = sort_pending(pending_reviews, sort, lifetime_hours)
         {
-          pending_reviews: pending_reviews.map { |r| serialize_review_row(r, previously_reviewed_project_ids: previously_reviewed, user_lifetime_hours: lifetime_hours, priority_ship_ids: priority_ids) },
+          pending_reviews: pending_reviews.map { |r| serialize_review_row(r, previously_reviewed_project_ids: previously_reviewed, user_lifetime_hours: lifetime_hours) },
           all_reviews: @all_reviews.map { |r| serialize_review_row(r, flagged_project_ids: flagged_ids, previously_reviewed_project_ids: previously_reviewed) },
           pagy: pagy_props(@pagy)
         }

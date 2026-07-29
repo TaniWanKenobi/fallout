@@ -67,11 +67,7 @@ export default function TimeAuditsIndex({
             data={pending_reviews ?? []}
             noun="pending reviews"
             rowClassName={(row) =>
-              row.priority
-                ? 'bg-green-100 dark:bg-green-950/40'
-                : row.sibling_approved
-                  ? 'bg-yellow-50 dark:bg-yellow-950/20'
-                  : undefined
+              row.sibling_approved ? 'bg-yellow-50 dark:bg-yellow-950/20' : undefined
             }
           />
         </Deferred>

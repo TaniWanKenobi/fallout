@@ -190,18 +190,17 @@ class Admin::Reviews::BaseController < Admin::ApplicationController
     seconds_by_user.transform_values { |s| s > 0 ? (s / 3600.0).round(1) : nil }
   end
 
-  # Orders the pending queue. :hours sorts by the owner's lifetime approved hours (desc); otherwise
-  # by real wait with a +WAIT_BOOST handicap for priority ships (effective longest-waiting first).
-  # The boost only shifts ordering — actual wait times are unchanged.
-  def sort_pending(reviews, sort, lifetime_hours, priority_ship_ids)
+  # Orders the pending queue. :hours sorts by the owner's lifetime approved hours (desc);
+  # otherwise by real wait (longest-waiting first).
+  def sort_pending(reviews, sort, lifetime_hours)
     if sort == :hours
       reviews.sort_by { |r| -(lifetime_hours[r.ship.project.user_id] || -1) }
     else
-      reviews.sort_by { |r| r.ship.created_at - (priority_ship_ids.include?(r.ship.id) ? ReviewPriorityCalculator::WAIT_BOOST : 0) }
+      reviews.sort_by { |r| r.ship.created_at }
     end
   end
 
-  def serialize_review_row(review, flagged_project_ids: Set.new, previously_reviewed_project_ids: Set.new, user_lifetime_hours: {}, priority_ship_ids: Set.new)
+  def serialize_review_row(review, flagged_project_ids: Set.new, previously_reviewed_project_ids: Set.new, user_lifetime_hours: {})
     ship = review.ship
     sibling = review.is_a?(TimeAuditReview) ? ship.requirements_check_review : ship.time_audit_review
     {
@@ -220,8 +219,7 @@ class Admin::Reviews::BaseController < Admin::ApplicationController
       sibling_approved: sibling&.approved? || false,
       requirements_check_reviewer_display_name: review.is_a?(DesignReview) ? ship.requirements_check_review&.reviewer&.display_name : nil,
       previously_reviewed_by_me: previously_reviewed_project_ids.include?(ship.project_id),
-      approved_public_hours: user_lifetime_hours[ship.project.user_id],
-      priority: priority_ship_ids.include?(ship.id)
+      approved_public_hours: user_lifetime_hours[ship.project.user_id]
     }
   end
 

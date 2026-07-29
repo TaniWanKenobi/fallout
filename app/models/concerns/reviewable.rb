@@ -192,16 +192,8 @@ module Reviewable
           SQL
         ).first
       else
-        # Priority ships get a +WAIT_BOOST handicap on their real wait (ordering only). Computing
-        # priority needs the proportional approved-hours pass, so resolve it in Ruby over the
-        # candidate set rather than in SQL. Own claim still wins regardless of priority.
-        candidates = scope.includes(ship: :time_audit_review).to_a
-        return nil if candidates.empty?
-        priority_ids = ReviewPriorityCalculator.priority_ship_ids(candidates.map(&:ship))
-        candidates.min_by do |review|
-          [ review.reviewer_id == user.id ? 0 : 1,
-            review.ship.created_at - (priority_ids.include?(review.ship_id) ? ReviewPriorityCalculator::WAIT_BOOST : 0) ]
-        end
+        # Own claim wins first, then longest-waiting ship.
+        scope.order(own_claim_first, Arel.sql("ships.created_at ASC")).first
       end
     end
   end

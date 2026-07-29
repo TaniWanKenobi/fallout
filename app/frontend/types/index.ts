@@ -423,7 +423,6 @@ export interface ReviewRow {
   requirements_check_reviewer_display_name: string | null
   previously_reviewed_by_me: boolean
   approved_public_hours: number | null
-  priority: boolean
 }
 
 export interface TimeAuditReviewDetail {

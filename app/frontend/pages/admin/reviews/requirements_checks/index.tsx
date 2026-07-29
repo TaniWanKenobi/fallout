@@ -95,7 +95,6 @@ export default function RequirementsChecksIndex({
             data={pending_reviews ?? []}
             noun="pending reviews"
             rowClassName={(row) => {
-              if (row.priority) return 'bg-green-100 dark:bg-green-950/40'
               const parts: string[] = []
               if (row.previously_reviewed_by_me) parts.push('bg-blue-50 dark:bg-blue-950/20')
               if (row.sibling_approved) parts.push('bg-yellow-50 dark:bg-yellow-950/20')
