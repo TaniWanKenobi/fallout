@@ -117,6 +117,21 @@ module HcbService
     end.body
   end
 
+  # Updates mutable fields on an existing card grant (e.g. instructions, purpose,
+  # locks). Only the keys present in `attrs` are sent; HCB permits
+  # merchant_lock/category_lock/keyword_lock/purpose/one_time_use/instructions/expiration_at.
+  def update_card_grant(card_grant_id, attrs)
+    stub = noop_write(:update_card_grant, { id: card_grant_id }.merge(attrs))
+    return stub if stub
+
+    authenticated_connection.patch(
+      "/api/v4/card_grants/#{card_grant_id}"
+    ) do |req|
+      req.headers["Content-Type"] = "application/json"
+      req.body = attrs.to_json
+    end.body
+  end
+
   def topup_card_grant(card_grant_id, amount_cents:)
     stub = noop_write(:topup_card_grant, { id: card_grant_id, amount_cents: amount_cents })
     return stub if stub
