@@ -77,3 +77,7 @@ The admin dashboard (`/admin`) uses shadcn/ui components, completely separate fr
 ## Comments
 
 Do not add comments unless absolutely necessary for clarity — code should be self-describing. No large comment blocks. **Exception**: code with non-obvious effects beyond its immediate scope — especially security, access control, or authorization — **MUST** have an inline comment explaining why it exists. Examples: access directives, policy scoping, before_action filters, session/cookie manipulation, and any logic whose removal would silently change access. If someone reading the code in isolation couldn't tell why a line is there, comment it.
+
+## Other notes
+
+For temporary files, like scripts or one-time output data, use the folder in this directory called `tmp/` and not the system's `/tmp`.
