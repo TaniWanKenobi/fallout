@@ -10,19 +10,17 @@ module ShipChecks
   # quality progressively until it fits the 5MB Airtable attachment cap.
   # Returns JPEG bytes on success, nil on any failure.
   #
-  # Supports raster images handled natively by libvips (PNG/JPG/WEBP/GIF)
-  # plus PDF (first page rendered via libpoppler — the production Docker
-  # image installs libpoppler-glib8 explicitly so vips's PDF loader works).
-  # SVG is skipped — that would need librsvg.
+  # Supports raster images handled natively by libvips (PNG/JPG/WEBP/GIF).
+  # PDF and SVG are deliberately unsupported: CVE-2026-66066 (GHSA-xr9x-r78c-5hrm)
+  # made Active Storage call Vips.block_untrusted(true) at boot, which disables
+  # libvips's unfuzzed loaders — pdfload and svgload included — process-wide.
+  # Source files here come from user-controlled repos, so re-enabling them would
+  # reopen arbitrary file disclosure from the worker's environment.
   module UnifiedScreenshotProcessor
     MAX_BYTES = 5 * 1024 * 1024
-    # PDFs can be arbitrarily large; cap the input size we'll bother to render.
-    # 50MB is generous for typical hackathon zines (well under 5MB) but cheaply
-    # rejects pathological multi-hundred-page submissions before vips hits them.
-    MAX_PDF_INPUT_BYTES = 50 * 1024 * 1024
-    # Hard cap on bytes we'll pull from a remote source — covers PDFs and raster
-    # images. download_with_etag bails before reading the body if Content-Length
-    # exceeds this, so a malicious or accidental giant file doesn't blow memory.
+    # Hard cap on bytes we'll pull from a remote source. download_with_etag bails
+    # before reading the body if Content-Length exceeds this, so a malicious or
+    # accidental giant file doesn't blow memory.
     MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024
     # Lower than Net::HTTP defaults; matches ShipCheckService::GITHUB_TIMEOUT so a
     # stuck origin doesn't pin a Solid Queue worker.
@@ -31,28 +29,25 @@ module ShipChecks
     JPEG_INITIAL_QUALITY = 85
     JPEG_MIN_QUALITY = 30
     MAX_DIMENSION = 2400
-    PDF_RENDER_DPI = 150
 
     EXT_FOR_CONTENT_TYPE = {
       "image/png" => ".png",
       "image/jpeg" => ".jpg",
       "image/webp" => ".webp",
-      "image/gif" => ".gif",
-      "application/pdf" => ".pdf"
+      "image/gif" => ".gif"
     }.freeze
 
     SUPPORTED_CONTENT_TYPES = EXT_FOR_CONTENT_TYPE.keys.freeze
 
-    # GitHub raw and many CDNs return application/octet-stream for files (PDFs
-    # in particular). When the response content-type isn't one we know how to
-    # handle, fall back to the URL's path extension to identify the format.
+    # GitHub raw and many CDNs return application/octet-stream for image files.
+    # When the response content-type isn't one we know how to handle, fall back
+    # to the URL's path extension to identify the format.
     CONTENT_TYPE_FROM_EXT = {
       ".png" => "image/png",
       ".jpg" => "image/jpeg",
       ".jpeg" => "image/jpeg",
       ".webp" => "image/webp",
-      ".gif" => "image/gif",
-      ".pdf" => "application/pdf"
+      ".gif" => "image/gif"
     }.freeze
 
     def self.process(url)
@@ -62,11 +57,6 @@ module ShipChecks
       effective_type = resolve_content_type(content_type, url)
       unless SUPPORTED_CONTENT_TYPES.include?(effective_type)
         Rails.logger.warn("UnifiedScreenshotProcessor: unsupported content_type=#{content_type} for url=#{url}")
-        return nil
-      end
-
-      if effective_type == "application/pdf" && bytes.bytesize > MAX_PDF_INPUT_BYTES
-        Rails.logger.warn("UnifiedScreenshotProcessor: PDF source #{bytes.bytesize} bytes exceeds #{MAX_PDF_INPUT_BYTES} cap for url=#{url}")
         return nil
       end
 
@@ -94,14 +84,8 @@ module ShipChecks
         Tempfile.create([ "screenshot_dst", ".jpg" ]) do |dst|
           quality = JPEG_INITIAL_QUALITY
           loop do
-            pipeline = ImageProcessing::Vips.source(src.path)
-            # vips's PDF loader options: page=0 starts at the first page and
-            # n=1 caps to a single page (vips's default is also 1, but we set
-            # it explicitly so multi-page PDFs never accidentally render
-            # everything). dpi controls raster resolution. Image loaders don't
-            # accept these args, so we apply them only for PDFs.
-            pipeline = pipeline.loader(page: 0, n: 1, dpi: PDF_RENDER_DPI) if content_type == "application/pdf"
-            pipeline
+            ImageProcessing::Vips
+              .source(src.path)
               .resize_to_limit(MAX_DIMENSION, MAX_DIMENSION)
               .convert("jpg")
               .saver(quality: quality, strip: true)

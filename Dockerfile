@@ -18,12 +18,10 @@ WORKDIR /rails
 # block unreviewed upgrades; update deliberately when Debian rolls a point release.
 ARG CURL_VERSION=7.88.1-10+deb12u15
 ARG LIBJEMALLOC2_VERSION=5.3.0-1
+# 8.14.1 satisfies the >= 8.13 floor Active Storage requires to boot (it calls
+# Vips.block_untrusted(true) for CVE-2026-66066). libpoppler-glib8 was dropped
+# alongside PDF screenshot support — that block disables vips's pdfload anyway.
 ARG LIBVIPS42_VERSION=8.14.1-3+deb12u3
-# Enables PDF rendering through libvips (built with --enable-poppler upstream;
-# the lib is dlopened at runtime so we install it explicitly). Used by
-# ShipChecks::UnifiedScreenshotProcessor when the YSWS Unified upload's source
-# file is a PDF (common for hackathon zines).
-ARG LIBPOPPLER_GLIB8_VERSION=22.12.0-2+deb12u2
 ARG SQLITE3_VERSION=3.40.1-2+deb12u2
 
 RUN apt-get update -qq && \
@@ -31,7 +29,6 @@ RUN apt-get update -qq && \
       curl="${CURL_VERSION}" \
       libjemalloc2="${LIBJEMALLOC2_VERSION}" \
       libvips42="${LIBVIPS42_VERSION}" \
-      libpoppler-glib8="${LIBPOPPLER_GLIB8_VERSION}" \
       sqlite3="${SQLITE3_VERSION}" \
       wget && \
     rm -rf /var/lib/apt/lists /var/cache/apt/archives

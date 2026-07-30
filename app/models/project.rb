@@ -98,7 +98,7 @@ class Project < ApplicationRecord
   # bulletin board explore feed and the public /api/v1/explore API. Populated
   # by ComputeProjectUnifiedThumbnailJob (zine source URL discovered via
   # ShipChecks::UnifiedScreenshotFinder, then transcoded to JPEG via
-  # ShipChecks::UnifiedScreenshotProcessor which also handles PDF rasterization).
+  # ShipChecks::UnifiedScreenshotProcessor — raster formats only, no PDF/SVG).
   has_one_attached :unified_thumbnail
 
   def discard

@@ -3,7 +3,9 @@
 # resulting image stored as an anonymous ActiveStorage blob.
 #
 # Source priority: zine from repo (via UnifiedScreenshotFinder) > journal entry image.
-# PDFs are rasterised to a PNG of their first page before compositing.
+# Raster formats only — libvips's pdfload/svgload are blocked process-wide by
+# Active Storage's Vips.block_untrusted(true) (CVE-2026-66066), so a PDF zine
+# falls through to the next source instead of rasterising.
 #
 # Returns nil if no source image is available or compositing fails.
 class ReviewCardImageService
@@ -52,9 +54,7 @@ class ReviewCardImageService
 
     urls = [
       "https://raw.githubusercontent.com/#{nwo}/main/zine.png",
-      "https://raw.githubusercontent.com/#{nwo}/main/zine.pdf",
-      "https://raw.githubusercontent.com/#{nwo}/master/zine.png",
-      "https://raw.githubusercontent.com/#{nwo}/master/zine.pdf"
+      "https://raw.githubusercontent.com/#{nwo}/master/zine.png"
     ]
 
     urls.each do |url|
@@ -86,6 +86,13 @@ class ReviewCardImageService
 
     encoded_url = Addressable::URI.parse(url).normalize.to_s
     ext = File.extname(URI.parse(encoded_url).path).downcase.presence || ".png"
+    # Bail on formats libvips can't load (PDF/SVG) so `call` falls through to the
+    # journal-image source instead of downloading a file composite() will reject.
+    unless ShipChecks::UnifiedScreenshotProcessor::CONTENT_TYPE_FROM_EXT.key?(ext)
+      Rails.logger.warn("ReviewCardImageService: unsupported zine format #{ext} for project ##{project.id}")
+      return nil
+    end
+
     tmp = Tempfile.new([ "zine_source", ext ])
     tmp.binmode
 

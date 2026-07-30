@@ -12,7 +12,7 @@ class ComputeProjectUnifiedThumbnailJob < ApplicationJob
 
   # Serialize per project so concurrent triggers (ship approval + repo_link edit) don't
   # race on the same attachment. Duration is the abandon-the-lock timeout — generous
-  # because libvips PDF rasterization plus HTTP timeouts can take ~30s in the worst case.
+  # because libvips transcoding plus HTTP timeouts can take ~30s in the worst case.
   limits_concurrency to: 1, key: ->(project_id, *) { "unified_thumbnail:#{project_id}" }, duration: 5.minutes
 
   # source_url: when a caller already discovered the zine URL (e.g. preflight reusing its
@@ -117,12 +117,6 @@ class ComputeProjectUnifiedThumbnailJob < ApplicationJob
     effective_type = ShipChecks::UnifiedScreenshotProcessor.resolve_content_type(content_type, source_url)
     unless ShipChecks::UnifiedScreenshotProcessor::SUPPORTED_CONTENT_TYPES.include?(effective_type)
       Rails.logger.warn("ComputeProjectUnifiedThumbnailJob: unsupported content_type=#{content_type} for project ##{project.id}, skipping")
-      project.update_columns(unified_thumbnail_checked_at: Time.current)
-      return
-    end
-
-    if effective_type == "application/pdf" && bytes.bytesize > ShipChecks::UnifiedScreenshotProcessor::MAX_PDF_INPUT_BYTES
-      Rails.logger.warn("ComputeProjectUnifiedThumbnailJob: PDF too large for project ##{project.id} (#{bytes.bytesize} bytes), skipping")
       project.update_columns(unified_thumbnail_checked_at: Time.current)
       return
     end
