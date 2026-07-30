@@ -238,7 +238,7 @@ Note: two `Pagination.tsx` files exist (`components/Pagination.tsx` and `compone
 - `use-mobile.ts` — mobile breakpoint detection (admin/shadcn)
 - `useAdminDark.ts` — admin dark-mode state
 - `useReviewHeartbeat.ts` — keeps a review claim alive while reviewing
-- `useReviewShortcuts.ts` — keyboard shortcuts for review queues
+- `useReviewShortcuts.ts` — keyboard shortcuts for review queues (used by the RC, DR, and BR show pages, which share the same bindings; `ShortcutHelpDialog` renders the `?` cheatsheet)
 
 Some hook-like helpers also live under `app/frontend/lib/` (e.g. `useColorLerp.ts`, `useLiveReload.ts`, `useNowTick.ts`).
 
