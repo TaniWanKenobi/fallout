@@ -13,7 +13,7 @@ steps:
 
   - key: welcome_4
     type: dialogue
-    prompt: "In exchange, I'll give you prizes! Maybe an invite to our base in Shenzhen..."
+    prompt: "In exchange, I'll find your parts and give you prizes!"
 
   - key: how_heard
     type: multi_choice
