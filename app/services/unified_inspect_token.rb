@@ -22,9 +22,15 @@ class UnifiedInspectToken
     ActiveSupport::SecurityUtils.secure_compare(token, expected)
   end
 
-  # Absolute URL embedded into the YSWS Unified DB justification text.
+  # Absolute URL embedded into the YSWS Unified DB justification text. The link is
+  # only ever followed off-platform, so a missing APP_HOST must fail loudly rather
+  # than publish a localhost URL auditors can't open — outside development there is
+  # no host we can safely guess.
   def self.url_for(ship_id)
-    host = ENV.fetch("APP_HOST", "localhost:3000")
+    host = ENV["APP_HOST"].presence
+    raise "APP_HOST must be set to issue unified_inspect URLs" if host.nil? && !Rails.env.development?
+
+    host ||= "localhost:3000"
     scheme = host.include?("localhost") ? "http" : "https"
     "#{scheme}://#{host}/admin/unified_inspect/#{ship_id}/#{sign(ship_id)}"
   end

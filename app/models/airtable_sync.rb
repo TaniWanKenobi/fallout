@@ -78,6 +78,8 @@ class AirtableSync < ApplicationRecord
       return filepath
     end
 
+    guard_external_writes!
+
     response = Faraday.post("https://api.airtable.com/v0/#{base_id || ENV['AIRTABLE_BASE_ID']}/#{table_id}/sync/#{sync_id}") do |req|
       req.headers = {
         "Authorization" => "Bearer #{ENV['AIRTABLE_API_KEY']}",
@@ -104,6 +106,8 @@ class AirtableSync < ApplicationRecord
   # the analytics ships table via the cron and the YSWS unified table on
   # approval — distinct identifiers prevent the unique index collision).
   def self.upload_or_create!(table_id, object, fields, identifier: nil, base_id: nil)
+    guard_external_writes!
+
     identifier ||= build_identifier(object)
     base_id ||= ENV["AIRTABLE_BASE_ID"]
     old_airtable_id = find_by(record_identifier: identifier)&.airtable_id
@@ -148,6 +152,8 @@ class AirtableSync < ApplicationRecord
   #
   # Limit: 5MB per attachment after base64 decode (Airtable docs).
   def self.upload_attachment!(record_id:, field_name:, filename:, content_type:, bytes:, base_id: nil)
+    guard_external_writes!
+
     base_id ||= ENV["AIRTABLE_BASE_ID"]
     url = "https://content.airtable.com/v0/#{base_id}/#{record_id}/#{field_name}/uploadAttachment"
 
@@ -171,6 +177,19 @@ class AirtableSync < ApplicationRecord
 
   class << self
     private
+
+    # Airtable rows are consumed off-platform and carry env-derived values (the
+    # unified justification's inspect URL is built from APP_HOST and signed with
+    # EXTERNAL_API_KEY). A dev process pointed at the production database would
+    # overwrite live rows with dev-scoped values, so non-production writes fail
+    # closed and need a deliberate opt-in. Local CSV dumps (`no_upload`) are
+    # unaffected — this only gates the outbound HTTP calls.
+    def guard_external_writes!
+      return if Rails.env.production?
+      return if ENV["ALLOW_AIRTABLE_WRITES"] == "1"
+
+      raise "Refusing to write to Airtable from the #{Rails.env} environment — set ALLOW_AIRTABLE_WRITES=1 to override"
+    end
 
     def base_id_for(klass)
       if klass.respond_to?(:airtable_sync_base_id)
